@@ -13,7 +13,7 @@ from leekspin import const
 from leekspin import util
 
 
-def generateExtraInfo(nickname, fingerprint, ts, ipv4, port, bridge=True):
+def generateExtraInfo(nickname, fingerprint, ts, ipv4, port, bridge=None):
     """Create an OR extra-info document.
 
     See §2.2 "Extra-info documents" in dir-spec.txt_.
@@ -51,22 +51,25 @@ def generateExtraInfo(nickname, fingerprint, ts, ipv4, port, bridge=True):
     extra.append(b"dirreq-v3-direct-dl complete=0,timeout=0,running=0")
     extra.append(b"dirreq-v3-tunneled-dl complete=12,timeout=0,running=0")
 
-    if bridge:
-        scramblesuitPassword = b'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+    if bridge is not None:
 
-        obfs4iatMode = bytes(random.getrandbits(1))  # 0 or 1
-        # hexadecimal, 40 chars long:
-        obfs4nodeID = hashlib.sha1(bytes(random.getrandbits(8))).hexdigest()
-        # hexadecimal, 64 chars long:
-        obfs4publicKey = hashlib.sha256(bytes(random.getrandbits(8))).hexdigest()
-
-        extra.append(b"transport obfs3 %s:%d" % (ipv4, port + 1))
-        extra.append(b"transport obfs2 %s:%d" % (ipv4, port + 2))
-        extra.append(b"transport scramblesuit %s:%d password=%s" %
-                     (ipv4, port + 3, scramblesuitPassword))
-        # PT args are comma-separated in the bridge-extrainfo descriptors:
-        extra.append(b"transport obfs4 %s:%d iat-mode=%s,node-id=%s,public-key=%s" %
-                     (ipv4, port + 4, obfs4iatMode, obfs4nodeID, obfs4publicKey))
+        if 'obfs3' in bridge:
+            extra.append(b"transport obfs3 %s:%d" % (ipv4, port + 1))
+        if 'obfs2' in bridge:
+            extra.append(b"transport obfs2 %s:%d" % (ipv4, port + 2))
+        if 'scramblesuit' in bridge:
+            scramblesuitPassword = b'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+            extra.append(b"transport scramblesuit %s:%d password=%s" %
+                        (ipv4, port + 3, scramblesuitPassword))
+        if 'obfs4' in bridge:
+            obfs4iatMode = bytes(random.getrandbits(1))  # 0 or 1
+            # hexadecimal, 40 chars long:
+            obfs4nodeID = hashlib.sha1(bytes(random.getrandbits(8))).hexdigest()
+            # hexadecimal, 64 chars long:
+            obfs4publicKey = hashlib.sha256(bytes(random.getrandbits(8))).hexdigest()
+            # PT args are comma-separated in the bridge-extrainfo descriptors:
+            extra.append(b"transport obfs4 %s:%d iat-mode=%s,node-id=%s,public-key=%s" %
+                        (ipv4, port + 4, obfs4iatMode, obfs4nodeID, obfs4publicKey))
         extra.append(b"bridge-stats-end %s (86400 s)" % ts)
         extra.append(b"bridge-ips ca=8")
         extra.append(b"bridge-ip-versions v4=8,v6=0")

@@ -44,11 +44,11 @@ from leekspin import util
 nacl = True if ntor.nacl else False
 
 
-def generateDescriptors(bridge=True, withoutTAP=False, withoutNTOR=False):
+def generateDescriptors(bridge=None, withoutTAP=False, withoutNTOR=False):
     """Create keys, certs, signatures, documents and descriptors for an OR.
 
-    :param bool bridge: If ``True``, generate Bridge descriptors; otherwise,
-        generate Relay descriptors.
+    :param list bridge: If not ``None``, generate Bridge descriptors with the
+        given transport types; otherwise, generate Relay descriptors.
     :param bool withoutTAP: If ``True``, generate descriptors without
         support for the TAP handshake, e.g. without RSA keys.
     :param bool withoutTAP: If ``True``, generate descriptors without
@@ -106,12 +106,12 @@ def generateDescriptors(bridge=True, withoutTAP=False, withoutNTOR=False):
                                                 vers, protocols, uptime,
                                                 bandwidth, extrainfoDigest,
                                                 onionKeyLine, signingKeyLine,
-                                                publicNTORKey, bridge=bridge)
+                                                publicNTORKey, bridge=bridge is not None)
     (serverDigestBinary,
      serverDigest,
      serverDigestPKCS1) = crypto.digestDescriptorContent(serverDoc)
 
-    if bridge:
+    if bridge is not None:
         serverDoc = b'@purpose bridge\n' + serverDoc
 
     serverDesc = crypto.signDescriptorContent(serverDoc,
@@ -245,18 +245,24 @@ def createRelayOrBridgeDescriptors(count, bridge=True, **kwargs):
     :param bool bridge: If ``True``, generate Bridge descriptors; otherwise,
         generate Relay descriptors.
     """
-    logging.info("Generating %d %s descriptors..." %
-                 (int(count), 'bridge' if bridge else 'relay'))
-    logging.info("Generated router nicknames:")
-
     withoutTAP = False
     withoutNTOR = False
+    numProbingVulnerable = 0
 
     if kwargs:
         if "withoutTAP" in kwargs:
             withoutTAP = kwargs.get("withoutTAP")
         if "withoutNTOR" in kwargs:
             withoutNTOR = kwargs.get("withoutNTOR")
+        if "numProbingVulnerable" in kwargs:
+            numProbingVulnerable = kwargs.get("numProbingVulnerable")
+
+    logging.info("Generating %d %s descriptors, among which %d only support "
+                 "protocols vulnerable to active probing..." %
+                 (int(count), 'bridge' if bridge else 'relay',
+                  numProbingVulnerable))
+    logging.info("Generated router nicknames:")
+
 
     server_descriptors    = list()
     netstatus_consensus   = list()
@@ -271,9 +277,21 @@ def createRelayOrBridgeDescriptors(count, bridge=True, **kwargs):
 
         for i in xrange(int(count)):
             try:
+                pt_names = ['obfs2', 'obfs3', 'obfs4', 'scramblesuit']
+                # We facilitate the creation of descriptors that only advertise
+                # transports that are vulnerable to active probing attacks.
+                # This is necessary to keep BridgeDB's unit tests working after
+                # our fix for bug 28655, in which we make active
+                # probing-resistant bridges not give out transports that aren't
+                # resistant to active probing:
+                # <https://bugs.torproject.org/28655>
+                if numProbingVulnerable:
+                    pt_names = ['obfs2', 'obfs3']
+                    numProbingVulnerable -= 1
+
                 (extrainfo,
                  server,
-                 netstatus) = generateDescriptors(bridge=bridge,
+                 netstatus) = generateDescriptors(bridge=pt_names,
                                                   withoutTAP=withoutTAP,
                                                   withoutNTOR=withoutNTOR)
             except Exception as error:
@@ -328,7 +346,8 @@ def createRelayOrBridgeDescriptors(count, bridge=True, **kwargs):
         code = 0
         sys.exit(code)
 
-def create(count, descriptorType=None, withoutTAP=False, withoutNTOR=False):
+def create(count, descriptorType=None, withoutTAP=False, withoutNTOR=False,
+           numProbingVulnerable=0):
     """Create **count** descriptors of type **descriptor_type**.
 
     :param int count: The number of descriptors to generate.
@@ -346,6 +365,7 @@ def create(count, descriptorType=None, withoutTAP=False, withoutNTOR=False):
         bridge = bool(descriptorType == 'bridge')
         createRelayOrBridgeDescriptors(count, bridge=bridge,
                                        withoutTAP=withoutTAP,
-                                       withoutNTOR=withoutNTOR)
+                                       withoutNTOR=withoutNTOR,
+                                       numProbingVulnerable=numProbingVulnerable)
     elif descriptorType in ('hidden_service',):
         createHiddenServiceDescriptors(count)

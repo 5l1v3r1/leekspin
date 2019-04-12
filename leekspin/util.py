@@ -62,6 +62,10 @@ def getArgParser():
     descgroup2.add_argument("-xn", "--without-ntor", action="store_true",
                             help=("generate descriptors without ntor support, "
                                   "e.g. without Ed25519 keys"))
+    descgroup2.add_argument("-xp", "--num-probing-vulnerable", default=0, type=int,
+                            help="make <m> out of all <n> descriptors "
+                                 "vulnerable to active probing (i.e., obfs2, "
+                                 "obfs3, and vanilla.")
     descgroup2.set_defaults(without_tap=False, without_ntor=False)
 
     group = parser.add_argument_group()
